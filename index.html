@@ -259,8 +259,9 @@ function notify(subject, text){
   if(!CLOUD) return Promise.resolve(false);
   clearTimeout(timer); dirty = false; S.t = Date.now();
   try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
-  return fetch(API, {method:"POST", body:JSON.stringify({k:K, s:S, rows:rows(), notify:{subject, text}})})
-    .then(r=>r.json()).then(r=>{ cloud(r.ok ? "✓ Сохранено" : "Не сохранилось в облаке", !r.ok); return !!r.ok; })
+  // Уведомления пока не работают (блокировки), поэтому «отправить» = надёжно сохранить в таблицу с отметкой
+  return fetch(API, {method:"POST", body:JSON.stringify({k:K, s:S, rows:rows()})})
+    .then(r=>r.json()).then(r=>{ if(r.ok) cloud("✓ Сохранено"); return !!r.ok; })
     .catch(()=>{ cloud("Нет связи, сохранено только на этом устройстве", true); return false; });
 }
 function blockText(b){
@@ -313,7 +314,7 @@ function finish(){
   let h = "<h1>" + (miss.length ? "Почти готово" : "Спасибо, это все вопросы!") + "</h1>";
   const full = buildText(), sentAll = S.sentAll === full;
   h += '<div class="card actions">'+(sentAll
-      ? '<div class="q" style="color:var(--ok)">✓ Все ответы отправлены</div><div class="hint">Если что-то поменяете, здесь можно будет отправить заново.</div>'
+      ? '<div class="q" style="color:var(--ok)">✓ Все ответы отправлены. Спасибо!</div><div class="hint">Если не сложно, напишите мне в WhatsApp пару слов, что закончили. Если что-то поменяете, здесь можно будет отправить заново.</div>'
       : '<div class="q">Отправить ответы</div><div class="hint">'+(S.sentAll ? "Ответы изменились после отправки. " : "")+'Нажмите кнопку, и ответы сразу придут мне.</div>'+
         '<button class="main" id="sendall">'+(S.sentAll ? "Отправить заново" : "Отправить все ответы")+'</button>')+
     '<button id="copy">Скопировать текст</button><div class="saved" id="msg"></div></div>';
