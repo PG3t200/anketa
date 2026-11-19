@@ -65,7 +65,6 @@ p{margin:0 0 12px}
 
 <script>
 const NAME = "Владимир Алексеевич";
-const PHONE = "79154458956"; // куда приходят ответы в WhatsApp
 const EX = ["Не знаю","Такого нет, всё подождёт до утра","Подрядчиков нет","Ничего такого","Связи нет","Пока не нужно, хватит сайта или бота","На ваше усмотрение","Нет, только я"];
 // t: one | many | text
 const BLOCKS = [
@@ -237,47 +236,32 @@ function sendCard(){
     '<button id="unsend">Снять отметку «отправлено»</button>';
   else if(st === "changed") h = '<div class="q" style="color:var(--warn)">Ответы изменены после отправки</div>'+
     '<div class="hint">Отправьте исправленный блок, я буду смотреть последний вариант.</div>'+
-    '<button class="main" id="sendblock">Отправить исправление в WhatsApp</button><button id="unsend">Снять отметку «отправлено»</button>';
+    '<button class="main" id="sendblock">Отправить исправление</button><button id="unsend">Снять отметку «отправлено»</button>';
   else h = '<div class="q">Отправить этот блок сейчас</div>'+
     '<div class="hint">Необязательно: можно отправить всё сразу в конце.</div>'+
-    '<button class="main" id="sendblock"'+(any?"":" disabled")+'>Отправить блок в WhatsApp</button>';
-  el.innerHTML = h;
+    '<button class="main" id="sendblock"'+(any?"":" disabled")+'>Отправить блок</button>';
+  el.innerHTML = h + '<div class="saved" id="sendmsg"></div>';
   const sb = document.getElementById("sendblock"), us = document.getElementById("unsend");
   if(sb) sb.onclick = ()=>{
-    const t = blockText(b), pre = st === "changed" ? "ИСПРАВЛЕНИЕ. " : "";
-    const mark = ()=>{ S.sent = S.sent || {}; S.sent[b] = t; save(); flush(); if(S.step === b) sendCard(); };
-    openWA(pre + t, el, mark);
+    const t = blockText(b), fix = st === "changed";
+    sb.disabled = true; sb.textContent = "Отправляю…";
+    S.sent = S.sent || {}; const was = S.sent[b]; S.sent[b] = t;
+    notify((fix ? "ИСПРАВЛЕНИЕ. " : "") + "Анкета: блок " + b + " из " + N, (fix ? "ИСПРАВЛЕНИЕ\n\n" : "") + t).then(ok=>{
+      if(!ok){ if(was) S.sent[b] = was; else delete S.sent[b]; }
+      save(); if(S.step === b){ sendCard(); if(!ok) document.getElementById("sendmsg").textContent = "Не получилось отправить. Проверьте интернет и нажмите ещё раз."; }
+    });
   };
   if(us) us.onclick = ()=>{ delete S.sent[b]; save(); sendCard(); };
 }
 
-// Открыть WhatsApp с готовым текстом. Отметка «отправлено» ставится, только если WhatsApp реально открылся
-// (страница ушла в фон). Если за 2,5 с не открылся — показываем запасные варианты.
-function openWA(text, box, onOpened){
-  const mob = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const web = "https://wa.me/" + PHONE + "?text=" + encodeURIComponent(text);
-  const app = "whatsapp://send?phone=" + PHONE + "&text=" + encodeURIComponent(text);
-  let done = false;
-  const ok = ()=>{ if(!done){ done = true; onOpened(); } };
-  const h = ()=>{ if(document.visibilityState === "hidden"){ document.removeEventListener("visibilitychange", h); ok(); } };
-  document.addEventListener("visibilitychange", h);
-  flush();
-  if(mob) location.href = app; else window.open(web, "_blank");
-  setTimeout(()=>{
-    document.removeEventListener("visibilitychange", h);
-    if(done) return;
-    const f = document.createElement("div");
-    f.className = "fallback";
-    f.innerHTML = '<div class="q" style="color:var(--warn);margin-top:12px">WhatsApp не открылся</div>'+
-      '<div class="hint">Нажмите эту кнопку. Если и она не сработает, скопируйте текст и вставьте его в наш чат.</div>'+
-      '<a class="btn main" target="_blank" rel="noopener" href="'+(mob ? app : web)+'">Открыть WhatsApp</a>'+
-      '<button class="cp">Скопировать текст</button><button class="mk">Я отправил сам, отметить</button><div class="saved"></div>';
-    box.querySelectorAll(".fallback").forEach(x=>x.remove());
-    box.appendChild(f);
-    f.querySelector("a").onclick = ok;
-    f.querySelector(".cp").onclick = ()=>copy(text, m=>f.querySelector(".saved").textContent = m);
-    f.querySelector(".mk").onclick = ok;
-  }, 2500);
+// Отправка: таблица сохраняет ответы и присылает мне письмо. true — если таблица подтвердила.
+function notify(subject, text){
+  if(!CLOUD) return Promise.resolve(false);
+  clearTimeout(timer); dirty = false; S.t = Date.now();
+  try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){}
+  return fetch(API, {method:"POST", body:JSON.stringify({k:K, s:S, rows:rows(), notify:{subject, text}})})
+    .then(r=>r.json()).then(r=>{ cloud(r.ok ? "✓ Сохранено" : "Не сохранилось в облаке", !r.ok); return !!r.ok; })
+    .catch(()=>{ cloud("Нет связи, сохранено только на этом устройстве", true); return false; });
 }
 function blockText(b){
   const [title, qs] = BLOCKS[b-1];
@@ -297,7 +281,7 @@ function intro(){
    "<p>Здесь все вопросы, разбитые на "+N+" коротких блоков по 3 вопроса. В большинстве достаточно нажать на подходящий вариант.</p>"+
    "<p>Если хочется что-то пояснить, под каждым вопросом есть поле для текста. Если не знаете ответа, отметьте «Не знаю», я уточню у сотрудников.</p>"+
    "<p>Ответы сохраняются сами. Можно закрыть страницу и вернуться позже по той же ссылке"+(CLOUD ? ", хоть с телефона, хоть с компьютера," : "")+" и продолжить с того же места.</p>"+
-   "<p>Ответы можно отправлять мне в WhatsApp по блокам, кнопкой внизу блока, или все сразу в конце.</p></div>"+
+   "<p>Ответы можно отправлять мне по блокам, кнопкой внизу блока, или все сразу в конце.</p></div>"+
    (Object.keys(S.a).length ? '<div class="card list"><div class="q">Перейти к блоку</div>'+
      BLOCKS.map((b,i)=>{const qs=b[1].filter(vis), ok=qs.every(answered), st=blockState(i+1);
        const tag = st==="sent" ? ' <span class="small">· отправлен</span>' : st==="changed" ? ' <span class="small" style="color:var(--warn)">· изменён, не отправлен</span>' : "";
@@ -327,9 +311,11 @@ function buildText(){
 function finish(){
   const allQ = BLOCKS.flatMap(b=>b[1]).filter(vis), miss = allQ.filter(q=>!answered(q));
   let h = "<h1>" + (miss.length ? "Почти готово" : "Спасибо, это все вопросы!") + "</h1>";
-  h += '<div class="card actions"><div class="q">Отправить ответы</div><div class="hint">Откроется WhatsApp с готовым сообщением мне, останется нажать «Отправить».</div>'+
-    '<button class="main" id="wa">Отправить в WhatsApp</button>'+
-    '<button id="share">Отправить другим способом</button>'+
+  const full = buildText(), sentAll = S.sentAll === full;
+  h += '<div class="card actions">'+(sentAll
+      ? '<div class="q" style="color:var(--ok)">✓ Все ответы отправлены</div><div class="hint">Если что-то поменяете, здесь можно будет отправить заново.</div>'
+      : '<div class="q">Отправить ответы</div><div class="hint">'+(S.sentAll ? "Ответы изменились после отправки. " : "")+'Нажмите кнопку, и ответы сразу придут мне.</div>'+
+        '<button class="main" id="sendall">'+(S.sentAll ? "Отправить заново" : "Отправить все ответы")+'</button>')+
     '<button id="copy">Скопировать текст</button><div class="saved" id="msg"></div></div>';
   if(miss.length) h +='<div class="card"><div class="q">Без ответа: '+miss.length+'</div><div class="hint">Можно вернуться и ответить, а можно отправить как есть.</div>'+
     '<div class="list">'+miss.slice(0,12).map(q=>{const bi=BLOCKS.findIndex(b=>b[1].includes(q));return '<button data-go="'+(bi+1)+'">'+q[0]+". "+esc(q[2])+"</button>";}).join("")+(miss.length>12?'<div class="small" style="margin-top:8px">…и ещё '+(miss.length-12)+"</div>":"")+"</div></div>";
@@ -337,31 +323,16 @@ function finish(){
   app.innerHTML = h;
   window.scrollTo(0,0);
   const msg = t=>document.getElementById("msg").textContent=t;
-  document.getElementById("share").onclick = async()=>{
-    const text = buildText();
-    if(navigator.share){ try{ await navigator.share({text}); return; }catch(e){ if(e.name==="AbortError") return; } }
-    copy(text, msg);
+  const sa = document.getElementById("sendall");
+  if(sa) sa.onclick = ()=>{
+    sa.disabled = true; sa.textContent = "Отправляю…";
+    const was = S.sentAll; S.sentAll = full;
+    notify((was ? "ИСПРАВЛЕНИЕ. " : "") + "Анкета: все ответы", full).then(ok=>{
+      if(!ok) S.sentAll = was;
+      save(); if(S.step > N){ finish(); if(!ok) msg("Не получилось отправить. Проверьте интернет и нажмите ещё раз, или скопируйте текст."); }
+    });
   };
-  // Длинный текст в ссылке WhatsApp может обрезаться, поэтому шлём частями по блокам
-  const parts = chunks(buildText(), 2500), wa = document.getElementById("wa");
-  if(parts.length > 1) wa.insertAdjacentHTML("beforebegin", '<div class="hint">Ответов много, поэтому они уйдут в '+parts.length+' сообщениях. Нажимайте кнопки по очереди.</div>');
-  let prev = wa;
-  parts.forEach((p,i)=>{
-    let b = wa;
-    if(i){ b = document.createElement("button"); b.className = "main"; prev.after(b); }
-    if(parts.length > 1) b.textContent = "Отправить в WhatsApp: часть " + (i+1) + " из " + parts.length;
-    b.onclick = ()=>openWA(p, document.querySelector(".actions"), ()=>{ b.style.opacity = ".55"; });
-    prev = b;
-  });
-  document.getElementById("copy").onclick = ()=>copy(buildText(), msg);
-}
-
-function chunks(text, max){
-  const secs = text.split(/\n(?=== )/), out = [];
-  let cur = "";
-  secs.forEach(s=>{ if(cur && (cur.length + s.length + 1) > max){ out.push(cur); cur = s; } else cur = cur ? cur + "\n" + s : s; });
-  if(cur) out.push(cur);
-  return out.length > 1 ? out.map((p,i)=>"(" + (i+1) + "/" + out.length + ") " + p) : out;
+  document.getElementById("copy").onclick = ()=>copy(full, msg);
 }
 
 function copy(text, msg){
