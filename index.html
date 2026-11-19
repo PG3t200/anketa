@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Анкета ИТ</title>
+<style>
+:root{
+  --bg:#f3f6f9; --card:#ffffff; --text:#1c2733; --muted:#5f6d7a; --line:#dde4ea;
+  --accent:#1f6fb2; --accent-soft:#e6f0f9; --ok:#1e8a4c; --warn:#b26a00;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11171d; --card:#1a222b; --text:#e6ecf1; --muted:#97a6b3; --line:#2c3843;
+    --accent:#5aa7e6; --accent-soft:#1d3346; --ok:#4cc483; --warn:#e0a24a;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:17px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-text-size-adjust:100%}
+.wrap{max-width:640px;margin:0 auto;padding:16px 16px 120px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0 8px}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
+.meta{display:flex;justify-content:space-between;font-size:14px;color:var(--muted);margin-top:6px}
+h1{font-size:23px;margin:8px 0 12px;line-height:1.25}
+h2{font-size:15px;font-weight:600;color:var(--muted);margin:4px 0 14px;text-transform:uppercase;letter-spacing:.03em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.q{font-weight:600;margin-bottom:4px}
+.hint{font-size:14px;color:var(--muted);margin-bottom:10px}
+.opt{display:flex;align-items:flex-start;gap:12px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;margin-top:8px;cursor:pointer;user-select:none}
+.opt input{width:22px;height:22px;margin:1px 0 0;flex:none;accent-color:var(--accent)}
+.opt.on{border-color:var(--accent);background:var(--accent-soft)}
+textarea{width:100%;font:inherit;font-size:16px;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px;min-height:46px;resize:vertical}
+.big textarea{min-height:110px}
+textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+.nav .in{max-width:640px;margin:0 auto;display:flex;gap:10px}
+button{font:inherit;font-weight:600;border-radius:12px;padding:13px 16px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+button.main{background:var(--accent);border-color:var(--accent);color:#fff;flex:1}
+button:disabled{opacity:.4}
+.list button{display:block;width:100%;text-align:left;margin-top:8px;font-weight:500}
+.list .done{color:var(--ok)}
+.small{font-size:14px;color:var(--muted)}
+.actions button{display:block;width:100%;margin-top:10px}
+.saved{color:var(--ok);font-size:14px;min-height:20px;margin-top:8px}
+p{margin:0 0 12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="meta"><span id="where"></span><span id="count"></span></div>
+  </header>
+  <main id="app"></main>
+</div>
+<div class="nav"><div class="in">
+  <button id="back">Назад</button>
+  <button id="next" class="main">Далее</button>
+</div></div>
+
+<script>
+const NAME = "Владимир Алексеевич";
+const EX = ["Не знаю","Такого нет, всё подождёт до утра","Подрядчиков нет","Ничего такого","Связи нет","Пока не нужно, хватит сайта или бота","На ваше усмотрение","Нет, только я"];
+// t: one | many | text
+const BLOCKS = [
+ ["Мои задачи и приоритеты",[
+  [1,"one","Как распределяем моё время в первую очередь?",["В основном разработка приложений","Поровну: приложения, CRM, сайт, помощь","Сначала порядок в компьютерах и сети","Сначала CRM","Сначала сайт","На моё усмотрение, предложу план","Не знаю"]],
+  [2,"many","Что важнее всего сделать за первые 2 месяца?",["Приложение для клиентов","Приложение для сотрудников","CRM","Сайт","Порядок в компьютерах и сети","Резервные копии и безопасность","Помощь сотрудникам с техникой","Не знаю"],{max:3,hint:"Можно выбрать до трёх вариантов"}],
+  [3,"one","Кроме вас, может ли кто-то ещё ставить мне задачи и принимать работу?",["Нет, только я","Да"],{ph:"Если да, то кто?"}]]],
+ ["Мои задачи и приоритеты",[
+  [4,"one","Могут ли сотрудники обращаться ко мне напрямую?",["Да, с любыми вопросами","Да, с мелкими; крупное — через руководителя","Нет, только через руководителя","Через систему обращений и предложений (сделаю сам)","Не знаю"]],
+  [5,"one","Где удобно вести задачи и получать еженедельный отчёт?",["Telegram","MAX","WhatsApp","Электронная почта","Таск-трекер (предложу сам)","Созвон раз в неделю","Не знаю"]],
+  [6,"one","В какие часы мне нужно быть на связи? (время московское)",["С 9:00 до 18:00 по будням","С 9:00 до 18:00, включая выходные","С 9:00 до 21:00 по будням","С 9:00 до 21:00, включая выходные","С 8–9 утра до 23:00","Свободный график, главное — успевать по задачам"]]]],
+ ["Мои задачи / Компания и клиенты",[
+  [7,"many","На что нужно реагировать сразу, даже вне этих часов?",["Не работает сайт или онлайн-оплата","Не работают бронирование или CRM","Нет интернета в офисе","Такого нет, всё подождёт до утра"]],
+  [8,"many","Основные направления работы",["Туристические полёты и экскурсии","Чартер и трансфер","Авиационные работы","Санавиация, поиск и спасение","Обучение","Не знаю"]],
+  [9,"many","Откуда приходят клиенты?",["Сайт","Телефон","Мессенджеры","Соцсети","Турагентства и партнёры","Агрегаторы туров","Сарафанное радио","Не знаю"]]]],
+ ["Компания и клиенты",[
+  [10,"one","Как сейчас ведутся заявки и бронирования?",["Тетрадь, блокнот","Excel или Google Таблицы","Онлайн-сервис бронирования","CRM","По телефону, без записи","Не знаю"]],
+  [11,"many","Как клиенты платят?",["Онлайн на сайте","По ссылке или QR-коду (СБП)","Терминал","Наличные","Счёт для юрлиц","Не знаю"]],
+  [12,"many","Месяцы высокого сезона",["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"],{hint:"В это время я не буду делать крупных изменений"}]]],
+ ["Компания и клиенты / Люди",[
+  [13,"text","Что сейчас больше всего мешает работать или теряет деньги и клиентов?"],
+  [14,"one","Сколько всего сотрудников?",["До 10","10–25","25–50","Больше 50","Не знаю"]],
+  [15,"one","Сколько из них работает за компьютером?",["До 5","5–10","10–20","Больше 20","Не знаю"]]]],
+ ["Люди",[
+  [16,"many","Где работают люди?",["Офис в Горно-Алтайске","Вертолётная площадка, база","Ангар","Удалённо","В других городах","Не знаю"]],
+  [17,"many","Как сотрудники общаются между собой?",["Telegram","WhatsApp","MAX","Почта","Телефон","Битрикс24","Не знаю"]],
+  [18,"text","С кем мне познакомиться в первую очередь?",null,{ph:"Имя, роль, телефон"}]]],
+ ["Кто занимался ИТ до меня",[
+  [19,"one","Кто вёл компьютеры, сеть и сайт раньше?",["Штатный специалист","Приходящий специалист","Подрядная компания","Кто-то из сотрудников","Никто","Не знаю"]],
+  [20,"text","Как с ним связаться для передачи дел?",null,{ph:"Имя, телефон"}],
+  [21,"many","Что сейчас обслуживают подрядчики?",["Сайт","Интернет и сеть","Принтеры","Подрядчиков нет","Не знаю"]]]],
+ ["Кто занимался ИТ до меня / Техника",[
+  [22,"one","Записаны ли где-то пароли, схема сети, список техники?",["Да, всё записано","Что-то есть","Нет","Не знаю"]],
+  [23,"many","Что случалось за последний год?",["Потеря данных","Вирусы, шифровальщики","Взлом почты или аккаунтов","Падал сайт","Ничего такого","Не знаю"]],
+  [24,"one","Сколько компьютеров и ноутбуков?",["До 5","5–10","10–20","Больше 20","Не знаю"]]]],
+ ["Компьютеры, сеть, связь",[
+  [25,"one","Чья это техника?",["Компании","Личная техника сотрудников","По-разному","Не знаю"]],
+  [26,"many","Какие операционные системы?",["Windows 10 / 11","Windows 7 / 8","macOS","Linux или отечественные ОС","Не знаю"]],
+  [27,"one","Есть ли в офисе локальная сеть?",["Да, проводная и Wi-Fi","Только Wi-Fi","Нет, каждый компьютер сам по себе","Не знаю"]]]],
+ ["Компьютеры, сеть, связь",[
+  [28,"one","Есть ли сервер?",["Да, в офисе","Да, в облаке","Нет","Не знаю"]],
+  [29,"many","Что работает на сервере?",["Общие папки","Почта","Сайт","Не знаю"],{if:a=>has(a,28,"Да, в офисе")||has(a,28,"Да, в облаке")}],
+  [30,"one","На какой системе сервер?",["Windows Server","Linux","Другая","Не знаю"],{if:a=>has(a,28,"Да, в офисе")||has(a,28,"Да, в облаке")}]]],
+ ["Сеть, связь / Почта",[
+  [31,"one","Интернет в офисе",["Работает стабильно","Бывают перебои","Часто проблемы","Не знаю"],{ph:"Какой провайдер?"}],
+  [32,"many","Какая связь на площадках и в ангаре?",["Проводной интернет","Мобильный интернет","Спутниковая связь","Связи нет","Не знаю"]],
+  [33,"one","Как устроена почта?",["Общий ящик на mail.ru","Почта на своём домене","Каждый пользуется личной","Не знаю"]]]],
+ ["Почта, файлы, программы",[
+  [34,"many","Где хранятся рабочие документы?",["На компьютерах","Общая папка в сети","Яндекс Диск","Google Drive","Облако Mail.ru","Флешки","В мессенджерах","Не знаю"]],
+  [35,"one","На кого оформлены домен, хостинг, почта, облака?",["На компанию, доступы у вас","На кого-то из сотрудников","На подрядчика","Не знаю"]],
+  [36,"many","Какими программами пользуются каждый день?",["Excel или таблицы","Банк-клиент","ЭДО (Контур, СБИС, Диадок)","Авиационные программы","Не знаю"]]]],
+ ["Программы и данные",[
+  [37,"text","Какие авиационные программы и для чего?",null,{ph:"Планирование полётов, ТОиР, налёт…",if:a=>has(a,36,"Авиационные программы")}],
+  [38,"one","Делаются ли резервные копии важных данных?",["Да, регулярно, восстановление проверяли","Что-то делается","Нет","Не знаю"]],
+  [39,"one","Кто в компании отвечает за документы по персональным данным клиентов?",["Юрист","Бухгалтер","Сам руководитель","Никто","Не знаю"]]]],
+ ["CRM",[
+  [40,"one","Есть ли CRM сейчас?",["Есть, пользуемся","Пробовали, не прижилась","Нет","Не знаю"],{ph:"Какая и почему не прижилась?"}],
+  [41,"many","Что должна делать CRM?",["Заявки и бронирования","База клиентов","Работа с агентствами","Расписание бортов","Оплаты и долги","Отчёты для руководителя","Рассылки и повторные продажи","Не знаю"]],
+  [42,"one","Готовая система или своя разработка?",["Готовая (amoCRM, Битрикс24 и т. п.)","Своя разработка","На ваше усмотрение","Не знаю"]]]],
+ ["CRM / Приложения",[
+  [43,"many","С чем связать CRM?",["Сайт","Мессенджеры","Почта","Онлайн-оплата","Не знаю"]],
+  [44,"many","Какие отчёты вы хотели бы получать из CRM?",["Продажи и выручка за неделю или месяц","Сколько было заявок и сколько из них оплачено","Откуда приходят клиенты","Загрузка бортов и расписание","Неоплаченные брони и долги","Не знаю"]],
+  [45,"many","Какие приложения нужны?",["Для клиентов: бронирование и оплата","Для клиентов: бот в Telegram или MAX","Для сотрудников: расписание, диспетчерская","Для сотрудников: свой внутренний мессенджер","Для сотрудников: система обращений, жалоб и предложений","Для техников: учёт обслуживания","Для руководителя: отчёты","Не знаю"]]]],
+ ["Приложения",[
+  [46,"text","Какое приложение нужно первым и какую проблему оно решает? Как эта работа делается сейчас?"],
+  [47,"many","Где им пользоваться?",["В браузере","Телефон Android","iPhone","Telegram","MAX","На ваше усмотрение","Не знаю"]],
+  [48,"one","Есть ли описание, наброски, примеры?",["Да, пришлю","В голове, обсудим","Нет","Не знаю"]]]],
+ ["Приложения / Сайт",[
+  [49,"one","Где размещать приложения и данные?",["Российское облако, примерно 500–3 000 ₽/мес","На своём сервере в офисе","На ваше усмотрение","Не знаю"]],
+  [50,"many","В каких магазинах публиковать мобильное приложение?",["RuStore (бесплатно)","Google Play (из России сложно оплатить)","App Store (сейчас сложнее всего, бывают отказы)","AppGallery для телефонов Huawei","Пока не нужно, хватит сайта или бота","На ваше усмотрение","Не знаю"]],
+  [51,"text","Подскажите адрес сайта",null,{ph:"Адрес сайта"}]]],
+ ["Сайт",[
+  [52,"one","Кто делал и обслуживает сайт?",["Сами","Подрядчик","Конструктор (Tilda и т. п.)","Не знаю"]],
+  [53,"one","Что нужно с сайтом?",["Оставить, поправить мелочи","Серьёзно доработать","Сделать новый","Не знаю"]],
+  [54,"text","Кто даёт тексты, фото и цены для сайта?"]]],
+ ["Деньги и согласования",[
+  [55,"one","Есть ли деньги на покупку техники и программ и на оплату серверов для компании?",["Есть определённая сумма в месяц или в год","Согласуем каждую покупку отдельно","Пока не планировали","Не знаю"]],
+  [56,"one","Иногда могут понадобиться небольшие платежи: продление домена сайта раз в год, облачный сервер, платные программы. Кто будет их оплачивать?",["Бухгалтерия, по счёту на компанию","Руководитель оплачивает сам","Другой сотрудник"],{hint:"Я подскажу, что и когда продлить",ph:"Если другой сотрудник, то кто?"}],
+  [57,"text","Что ещё мне важно знать?"]]]
+];
+const N = BLOCKS.length, KEY = "anketa-it-v1";
+let S = {step:0, a:{}};
+try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.a) S = s; }catch(e){}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+function get(id){ return S.a[id] || (S.a[id] = {v:[], n:""}); }
+function has(a,id,val){ return !!(a[id] && a[id].v.includes(val)); }
+function vis(q){ const o=q[4]||{}; return !o.if || o.if(S.a); }
+function answered(q){ const x=S.a[q[0]]; return !!x && (x.v.length>0 || x.n.trim()!==""); }
+function esc(s){ return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+const app = document.getElementById("app");
+
+function render(){
+  const st = S.step;
+  const allQ = BLOCKS.flatMap(b=>b[1]).filter(vis);
+  const done = allQ.filter(answered).length;
+  document.getElementById("bar").style.width = (done/allQ.length*100)+"%";
+  document.getElementById("count").textContent = "Отвечено " + done + " из " + allQ.length;
+  document.getElementById("where").textContent = st===0 ? "Начало" : st>N ? "Готово" : "Блок " + st + " из " + N;
+  const back = document.getElementById("back"), next = document.getElementById("next");
+  back.disabled = st===0;
+  next.style.display = st>N ? "none" : "";
+  next.textContent = st===0 ? "Начать" : st===N ? "К отправке" : "Далее";
+  if(st===0) return intro();
+  if(st>N) return finish();
+  const [title, qs] = BLOCKS[st-1];
+  let h = "<h2>" + esc(title) + "</h2>";
+  qs.forEach(q=>{
+    if(!vis(q)) return;
+    const [id,t,text,opts,o={}] = q, x = get(id);
+    h += '<div class="card'+(t==="text"?" big":"")+'" data-id="'+id+'"><div class="q">'+id+". "+esc(text)+"</div>";
+    if(o.hint || t!=="text") h += '<div class="hint">'+esc(o.hint || (t==="one" ? "Выберите один вариант" : "Можно выбрать несколько"))+"</div>";
+    if(opts) opts.forEach((op,i)=>{
+      const on = x.v.includes(op);
+      h += '<label class="opt'+(on?" on":"")+'"><input type="'+(t==="one"?"radio":"checkbox")+'" name="q'+id+'" data-i="'+i+'"'+(on?" checked":"")+'><span>'+esc(op)+"</span></label>";
+    });
+    const ph = t==="text" ? (o.ph||"Ваш ответ") : (o.ph||"Пояснение, если хочется (необязательно)");
+    h += '<textarea data-n="'+id+'" placeholder="'+esc(ph)+'">'+esc(x.n)+"</textarea></div>";
+  });
+  h += '<div class="saved" id="saved"></div>';
+  app.innerHTML = h;
+  window.scrollTo(0,0);
+}
+
+function intro(){
+  app.innerHTML = '<h1>'+NAME+', добрый день!</h1><div class="card">'+
+   "<p>Здесь все вопросы, разбитые на "+N+" коротких блоков по 3 вопроса. В большинстве достаточно нажать на подходящий вариант.</p>"+
+   "<p>Если хочется что-то пояснить, под каждым вопросом есть поле для текста. Если не знаете ответа, отметьте «Не знаю», я уточню у сотрудников.</p>"+
+   "<p>Ответы сохраняются на этом телефоне сами. Можно закрыть страницу и вернуться позже по той же ссылке, продолжите с того же места.</p>"+
+   "<p>В конце нажмите «Отправить ответы», они придут мне сообщением.</p></div>"+
+   (Object.keys(S.a).length ? '<div class="card list"><div class="q">Перейти к блоку</div>'+
+     BLOCKS.map((b,i)=>{const qs=b[1].filter(vis), ok=qs.every(answered);
+       return '<button data-go="'+(i+1)+'"'+(ok?' class="done"':"")+">"+(ok?"✓ ":"")+(i+1)+". "+esc(b[0])+"</button>";}).join("")+
+     '<button data-go="'+(N+1)+'">→ К отправке</button></div>' : "");
+}
+
+function buildText(){
+  let s = "Ответы на анкету (" + NAME + ")\n", last = "";
+  BLOCKS.forEach(([title,qs])=>{
+    const shown = qs.filter(vis); if(!shown.length) return;
+    if(title !== last) s += "\n== " + title + " ==\n";
+    last = title;
+    shown.forEach(q=>{
+      const x = S.a[q[0]] || {v:[],n:""};
+      s += "\n" + q[0] + ". " + q[2] + "\n";
+      if(q[1]!=="text") s += "— " + (x.v.length ? x.v.join("; ") : "без ответа") + "\n";
+      if(x.n.trim()) s += (q[1]==="text" ? "— " : "  Пояснение: ") + x.n.trim() + "\n";
+      else if(q[1]==="text") s += "— без ответа\n";
+    });
+  });
+  return s;
+}
+
+function finish(){
+  const allQ = BLOCKS.flatMap(b=>b[1]).filter(vis), miss = allQ.filter(q=>!answered(q));
+  let h = "<h1>" + (miss.length ? "Почти готово" : "Спасибо, это все вопросы!") + "</h1>";
+  h += '<div class="card actions"><div class="q">Отправить ответы</div><div class="hint">Откроется выбор, куда отправить: выберите WhatsApp или Telegram и наш чат.</div>'+
+    '<button class="main" id="share">Отправить ответы</button>'+
+    '<button id="wa">Отправить через WhatsApp</button>'+
+    '<button id="copy">Скопировать текст</button><div class="saved" id="msg"></div></div>';
+  if(miss.length) h +='<div class="card"><div class="q">Без ответа: '+miss.length+'</div><div class="hint">Можно вернуться и ответить, а можно отправить как есть.</div>'+
+    '<div class="list">'+miss.slice(0,12).map(q=>{const bi=BLOCKS.findIndex(b=>b[1].includes(q));return '<button data-go="'+(bi+1)+'">'+q[0]+". "+esc(q[2])+"</button>";}).join("")+(miss.length>12?'<div class="small" style="margin-top:8px">…и ещё '+(miss.length-12)+"</div>":"")+"</div></div>";
+  h += '<div class="card"><div class="q">Как это выглядит</div><textarea readonly style="min-height:220px;font-size:14px">'+esc(buildText())+"</textarea></div>";
+  app.innerHTML = h;
+  window.scrollTo(0,0);
+  const msg = t=>document.getElementById("msg").textContent=t;
+  document.getElementById("share").onclick = async()=>{
+    const text = buildText();
+    if(navigator.share){ try{ await navigator.share({text}); return; }catch(e){ if(e.name==="AbortError") return; } }
+    copy(text, msg);
+  };
+  document.getElementById("wa").onclick = ()=>{ location.href = "https://wa.me/?text=" + encodeURIComponent(buildText()); };
+  document.getElementById("copy").onclick = ()=>copy(buildText(), msg);
+}
+
+function copy(text, msg){
+  const done = ()=>msg("Текст скопирован. Вставьте его в чат со мной.");
+  if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, ()=>fallback());
+  else fallback();
+  function fallback(){ const t=document.createElement("textarea"); t.value=text; document.body.appendChild(t); t.select();
+    try{ document.execCommand("copy"); done(); }catch(e){ msg("Не получилось скопировать: выделите текст ниже вручную."); } t.remove(); }
+}
+
+app.addEventListener("change", e=>{
+  const inp = e.target; if(!inp.dataset.i) return;
+  const card = inp.closest(".card"), id = +card.dataset.id;
+  const q = BLOCKS.flatMap(b=>b[1]).find(q=>q[0]===id), [, t, , opts, o={}] = q, x = get(id), op = opts[+inp.dataset.i];
+  if(t==="one") x.v = [op];
+  else if(inp.checked){
+    if(EX.includes(op)) x.v = [op];
+    else { x.v = x.v.filter(v=>!EX.includes(v));
+      if(o.max && x.v.length>=o.max){ inp.checked=false; const hn=card.querySelector(".hint"); hn.textContent="Не больше "+o.max+": сначала снимите одну галочку"; hn.style.color="var(--warn)"; return; }
+      x.v.push(op); }
+  } else x.v = x.v.filter(v=>v!==op);
+  save();
+  const sy = window.scrollY; render(); window.scrollTo(0,sy);
+});
+app.addEventListener("input", e=>{
+  const n = e.target.dataset.n; if(!n) return;
+  get(+n).n = e.target.value; save();
+  const s = document.getElementById("saved"); if(s) s.textContent = "Сохранено";
+});
+app.addEventListener("click", e=>{
+  const g = e.target.closest("[data-go]"); if(!g) return;
+  S.step = +g.dataset.go; save(); render();
+});
+document.getElementById("next").onclick = ()=>{ S.step = Math.min(S.step+1, N+1); save(); render(); };
+document.getElementById("back").onclick = ()=>{ S.step = Math.max(S.step-1, 0); save(); render(); };
+render();
+</script>
+</body>
+</html>
