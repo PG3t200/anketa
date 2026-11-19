@@ -62,6 +62,7 @@ p{margin:0 0 12px}
 
 <script>
 const NAME = "Владимир Алексеевич";
+const PHONE = "79154458956"; // куда приходят ответы в WhatsApp
 const EX = ["Не знаю","Такого нет, всё подождёт до утра","Подрядчиков нет","Ничего такого","Связи нет","Пока не нужно, хватит сайта или бота","На ваше усмотрение","Нет, только я"];
 // t: one | many | text
 const BLOCKS = [
@@ -198,28 +199,30 @@ function intro(){
 }
 
 function buildText(){
-  let s = "Ответы на анкету (" + NAME + ")\n", last = "";
+  // Без ответа не пишем целиком, только номера в конце: так сообщение короче
+  let s = "Ответы на анкету (" + NAME + ")\n", last = "", skip = [];
   BLOCKS.forEach(([title,qs])=>{
-    const shown = qs.filter(vis); if(!shown.length) return;
+    const shown = qs.filter(vis).filter(q=>answered(q) || (skip.push(q[0]), false));
+    if(!shown.length) return;
     if(title !== last) s += "\n== " + title + " ==\n";
     last = title;
     shown.forEach(q=>{
-      const x = S.a[q[0]] || {v:[],n:""};
+      const x = S.a[q[0]];
       s += "\n" + q[0] + ". " + q[2] + "\n";
-      if(q[1]!=="text") s += "— " + (x.v.length ? x.v.join("; ") : "без ответа") + "\n";
+      if(x.v.length) s += "— " + x.v.join("; ") + "\n";
       if(x.n.trim()) s += (q[1]==="text" ? "— " : "  Пояснение: ") + x.n.trim() + "\n";
-      else if(q[1]==="text") s += "— без ответа\n";
     });
   });
+  if(skip.length) s += "\nБез ответа: " + skip.join(", ") + "\n";
   return s;
 }
 
 function finish(){
   const allQ = BLOCKS.flatMap(b=>b[1]).filter(vis), miss = allQ.filter(q=>!answered(q));
   let h = "<h1>" + (miss.length ? "Почти готово" : "Спасибо, это все вопросы!") + "</h1>";
-  h += '<div class="card actions"><div class="q">Отправить ответы</div><div class="hint">Откроется выбор, куда отправить: выберите WhatsApp или Telegram и наш чат.</div>'+
-    '<button class="main" id="share">Отправить ответы</button>'+
-    '<button id="wa">Отправить через WhatsApp</button>'+
+  h += '<div class="card actions"><div class="q">Отправить ответы</div><div class="hint">Откроется WhatsApp с готовым сообщением мне, останется нажать «Отправить».</div>'+
+    '<button class="main" id="wa">Отправить в WhatsApp</button>'+
+    '<button id="share">Отправить другим способом</button>'+
     '<button id="copy">Скопировать текст</button><div class="saved" id="msg"></div></div>';
   if(miss.length) h +='<div class="card"><div class="q">Без ответа: '+miss.length+'</div><div class="hint">Можно вернуться и ответить, а можно отправить как есть.</div>'+
     '<div class="list">'+miss.slice(0,12).map(q=>{const bi=BLOCKS.findIndex(b=>b[1].includes(q));return '<button data-go="'+(bi+1)+'">'+q[0]+". "+esc(q[2])+"</button>";}).join("")+(miss.length>12?'<div class="small" style="margin-top:8px">…и ещё '+(miss.length-12)+"</div>":"")+"</div></div>";
@@ -232,8 +235,26 @@ function finish(){
     if(navigator.share){ try{ await navigator.share({text}); return; }catch(e){ if(e.name==="AbortError") return; } }
     copy(text, msg);
   };
-  document.getElementById("wa").onclick = ()=>{ location.href = "https://wa.me/?text=" + encodeURIComponent(buildText()); };
+  // Длинный текст в ссылке WhatsApp может обрезаться, поэтому шлём частями по блокам
+  const parts = chunks(buildText(), 2500), wa = document.getElementById("wa");
+  if(parts.length > 1) wa.insertAdjacentHTML("beforebegin", '<div class="hint">Ответов много, поэтому они уйдут в '+parts.length+' сообщениях. Нажимайте кнопки по очереди.</div>');
+  let prev = wa;
+  parts.forEach((p,i)=>{
+    let b = wa;
+    if(i){ b = document.createElement("button"); b.className = "main"; prev.after(b); }
+    if(parts.length > 1) b.textContent = "Отправить в WhatsApp: часть " + (i+1) + " из " + parts.length;
+    b.onclick = ()=>{ b.style.opacity = ".55"; location.href = "https://wa.me/" + PHONE + "?text=" + encodeURIComponent(p); };
+    prev = b;
+  });
   document.getElementById("copy").onclick = ()=>copy(buildText(), msg);
+}
+
+function chunks(text, max){
+  const secs = text.split(/\n(?=== )/), out = [];
+  let cur = "";
+  secs.forEach(s=>{ if(cur && (cur.length + s.length + 1) > max){ out.push(cur); cur = s; } else cur = cur ? cur + "\n" + s : s; });
+  if(cur) out.push(cur);
+  return out.length > 1 ? out.map((p,i)=>"(" + (i+1) + "/" + out.length + ") " + p) : out;
 }
 
 function copy(text, msg){
