@@ -52,6 +52,7 @@ p{margin:0 0 12px}
   <header>
     <div class="bar"><i id="bar"></i></div>
     <div class="meta"><span id="where"></span><span id="count"></span></div>
+    <div class="meta"><span id="cloud"></span></div>
   </header>
   <main id="app"></main>
 </div>
@@ -146,7 +147,40 @@ const BLOCKS = [
 const N = BLOCKS.length, KEY = "anketa-it-v1";
 let S = {step:0, a:{}};
 try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.a) S = s; }catch(e){}
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+function save(){ S.t = Date.now(); try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} schedule(); }
+
+// ---- Облако: Google Таблица. Работает, только если в ссылке есть ?k=код ----
+const API = "https://script.google.com/macros/s/AKfycbwhmwYCIpLifIsrSu80edFRHlzL045F9EHqzKr0c2NM7zcauHumQhOJHYbfnjrpmvYO/exec"; // веб-приложение Google Apps Script
+const K = new URLSearchParams(location.search).get("k") || "";
+const CLOUD = !!(API && K);
+let timer = null, dirty = false;
+function cloud(t, warn){ const c = document.getElementById("cloud"); if(c){ c.textContent = t; c.style.color = warn ? "var(--warn)" : "var(--ok)"; } }
+function payload(){ return JSON.stringify({k:K, s:S, rows:rows()}); }
+function rows(){
+  return BLOCKS.flatMap(([title,qs],bi)=>qs.filter(vis).map(q=>{
+    const x = S.a[q[0]] || {v:[],n:""}, st = blockState(bi+1);
+    return [q[0], title, q[2], x.v.join("; "), x.n.trim(), st==="sent" ? "да" : st==="changed" ? "изменён после отправки" : ""];
+  }));
+}
+function schedule(){ if(!CLOUD) return; dirty = true; cloud("Сохраняю…"); clearTimeout(timer); timer = setTimeout(push, 1200); }
+function push(){
+  if(!dirty) return; dirty = false;
+  fetch(API, {method:"POST", body:payload()}).then(r=>r.json())
+    .then(r=>cloud(r.error ? "Не сохранилось в облаке" : "✓ Сохранено", !!r.error))
+    .catch(()=>{ dirty = true; cloud("Нет связи, сохранено только на этом устройстве", true); });
+}
+function flush(){ if(CLOUD && dirty){ clearTimeout(timer); dirty = false; try{ navigator.sendBeacon(API, payload()); }catch(e){} } }
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "hidden") flush(); });
+function loadCloud(){
+  if(!CLOUD) return;
+  cloud("Загружаю ответы…");
+  fetch(API + "?k=" + encodeURIComponent(K)).then(r=>r.json()).then(r=>{
+    if(r.error){ cloud("Неверная ссылка, ответы сохраняются только на этом устройстве", true); return; }
+    if(r.s && r.s.a && (!S.t || r.s.t > S.t)){ S = r.s; try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} render(); }
+    else if(S.t && (!r.s || S.t > r.s.t)){ dirty = true; push(); }
+    cloud("✓ Сохранено");
+  }).catch(()=>cloud("Нет связи, сохранено только на этом устройстве", true));
+}
 function get(id){ return S.a[id] || (S.a[id] = {v:[], n:""}); }
 function has(a,id,val){ return !!(a[id] && a[id].v.includes(val)); }
 function vis(q){ const o=q[4]||{}; return !o.if || o.if(S.a); }
@@ -181,20 +215,62 @@ function render(){
     const ph = t==="text" ? (o.ph||"Ваш ответ") : (o.ph||"Пояснение, если хочется (необязательно)");
     h += '<textarea data-n="'+id+'" placeholder="'+esc(ph)+'">'+esc(x.n)+"</textarea></div>";
   });
-  h += '<div class="saved" id="saved"></div>';
+  h += '<div class="card actions" id="sendcard"></div><div class="saved" id="saved"></div>';
   app.innerHTML = h;
+  sendCard();
   window.scrollTo(0,0);
+}
+
+// Отправка одного блока. S.sent[номер блока] = текст, который был отправлен
+function blockState(b){
+  const t = blockText(b), was = S.sent && S.sent[b];
+  return !was ? "new" : was === t ? "sent" : "changed";
+}
+function sendCard(){
+  const el = document.getElementById("sendcard"); if(!el) return;
+  const b = S.step, st = blockState(b), qs = BLOCKS[b-1][1].filter(vis), any = qs.some(answered);
+  let h;
+  if(st === "sent") h = '<div class="q" style="color:var(--ok)">✓ Этот блок отправлен</div>'+
+    '<div class="hint">Если что-то поменяете в ответах выше, можно будет отправить исправление.</div>'+
+    '<button id="unsend">Снять отметку «отправлено»</button>';
+  else if(st === "changed") h = '<div class="q" style="color:var(--warn)">Ответы изменены после отправки</div>'+
+    '<div class="hint">Отправьте исправленный блок, я буду смотреть последний вариант.</div>'+
+    '<button class="main" id="sendblock">Отправить исправление в WhatsApp</button><button id="unsend">Снять отметку «отправлено»</button>';
+  else h = '<div class="q">Отправить этот блок сейчас</div>'+
+    '<div class="hint">Необязательно: можно отправить всё сразу в конце.</div>'+
+    '<button class="main" id="sendblock"'+(any?"":" disabled")+'>Отправить блок в WhatsApp</button>';
+  el.innerHTML = h;
+  const sb = document.getElementById("sendblock"), us = document.getElementById("unsend");
+  if(sb) sb.onclick = ()=>{
+    const t = blockText(b), pre = st === "changed" ? "ИСПРАВЛЕНИЕ. " : "";
+    S.sent = S.sent || {}; S.sent[b] = t; save(); sendCard();
+    flush(); location.href = "https://wa.me/" + PHONE + "?text=" + encodeURIComponent(pre + t);
+  };
+  if(us) us.onclick = ()=>{ delete S.sent[b]; save(); sendCard(); };
+}
+function blockText(b){
+  const [title, qs] = BLOCKS[b-1];
+  let s = "Анкета, блок " + b + " из " + N + ": " + title + "\n";
+  qs.filter(vis).forEach(q=>{
+    const x = S.a[q[0]];
+    s += "\n" + q[0] + ". " + q[2] + "\n";
+    if(!answered(q)){ s += "— без ответа\n"; return; }
+    if(x.v.length) s += "— " + x.v.join("; ") + "\n";
+    if(x.n.trim()) s += (q[1]==="text" ? "— " : "  Пояснение: ") + x.n.trim() + "\n";
+  });
+  return s;
 }
 
 function intro(){
   app.innerHTML = '<h1>'+NAME+', добрый день!</h1><div class="card">'+
    "<p>Здесь все вопросы, разбитые на "+N+" коротких блоков по 3 вопроса. В большинстве достаточно нажать на подходящий вариант.</p>"+
    "<p>Если хочется что-то пояснить, под каждым вопросом есть поле для текста. Если не знаете ответа, отметьте «Не знаю», я уточню у сотрудников.</p>"+
-   "<p>Ответы сохраняются на этом телефоне сами. Можно закрыть страницу и вернуться позже по той же ссылке, продолжите с того же места.</p>"+
-   "<p>В конце нажмите «Отправить ответы», они придут мне сообщением.</p></div>"+
+   "<p>Ответы сохраняются сами. Можно закрыть страницу и вернуться позже по той же ссылке"+(CLOUD ? ", хоть с телефона, хоть с компьютера," : "")+" и продолжить с того же места.</p>"+
+   "<p>Ответы можно отправлять мне в WhatsApp по блокам, кнопкой внизу блока, или все сразу в конце.</p></div>"+
    (Object.keys(S.a).length ? '<div class="card list"><div class="q">Перейти к блоку</div>'+
-     BLOCKS.map((b,i)=>{const qs=b[1].filter(vis), ok=qs.every(answered);
-       return '<button data-go="'+(i+1)+'"'+(ok?' class="done"':"")+">"+(ok?"✓ ":"")+(i+1)+". "+esc(b[0])+"</button>";}).join("")+
+     BLOCKS.map((b,i)=>{const qs=b[1].filter(vis), ok=qs.every(answered), st=blockState(i+1);
+       const tag = st==="sent" ? ' <span class="small">· отправлен</span>' : st==="changed" ? ' <span class="small" style="color:var(--warn)">· изменён, не отправлен</span>' : "";
+       return '<button data-go="'+(i+1)+'"'+(ok?' class="done"':"")+">"+(ok?"✓ ":"")+(i+1)+". "+esc(b[0])+tag+"</button>";}).join("")+
      '<button data-go="'+(N+1)+'">→ К отправке</button></div>' : "");
 }
 
@@ -243,7 +319,7 @@ function finish(){
     let b = wa;
     if(i){ b = document.createElement("button"); b.className = "main"; prev.after(b); }
     if(parts.length > 1) b.textContent = "Отправить в WhatsApp: часть " + (i+1) + " из " + parts.length;
-    b.onclick = ()=>{ b.style.opacity = ".55"; location.href = "https://wa.me/" + PHONE + "?text=" + encodeURIComponent(p); };
+    b.onclick = ()=>{ b.style.opacity = ".55"; flush(); location.href = "https://wa.me/" + PHONE + "?text=" + encodeURIComponent(p); };
     prev = b;
   });
   document.getElementById("copy").onclick = ()=>copy(buildText(), msg);
@@ -283,6 +359,7 @@ app.addEventListener("input", e=>{
   const n = e.target.dataset.n; if(!n) return;
   get(+n).n = e.target.value; save();
   const s = document.getElementById("saved"); if(s) s.textContent = "Сохранено";
+  sendCard();
 });
 app.addEventListener("click", e=>{
   const g = e.target.closest("[data-go]"); if(!g) return;
@@ -291,6 +368,7 @@ app.addEventListener("click", e=>{
 document.getElementById("next").onclick = ()=>{ S.step = Math.min(S.step+1, N+1); save(); render(); };
 document.getElementById("back").onclick = ()=>{ S.step = Math.max(S.step-1, 0); save(); render(); };
 render();
+loadCloud();
 </script>
 </body>
 </html>
