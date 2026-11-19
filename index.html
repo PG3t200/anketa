@@ -39,6 +39,8 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
 button{font:inherit;font-weight:600;border-radius:12px;padding:13px 16px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
 button.main{background:var(--accent);border-color:var(--accent);color:#fff;flex:1}
 button:disabled{opacity:.4}
+a.btn{display:block;text-align:center;text-decoration:none;font-weight:600;border-radius:12px;padding:13px 16px;margin-top:10px;background:var(--accent);color:#fff}
+.fallback button{display:block;width:100%;margin-top:10px}
 .list button{display:block;width:100%;text-align:left;margin-top:8px;font-weight:500}
 .list .done{color:var(--ok)}
 .small{font-size:14px;color:var(--muted)}
@@ -243,10 +245,39 @@ function sendCard(){
   const sb = document.getElementById("sendblock"), us = document.getElementById("unsend");
   if(sb) sb.onclick = ()=>{
     const t = blockText(b), pre = st === "changed" ? "ИСПРАВЛЕНИЕ. " : "";
-    S.sent = S.sent || {}; S.sent[b] = t; save(); sendCard();
-    flush(); location.href = "https://wa.me/" + PHONE + "?text=" + encodeURIComponent(pre + t);
+    const mark = ()=>{ S.sent = S.sent || {}; S.sent[b] = t; save(); flush(); if(S.step === b) sendCard(); };
+    openWA(pre + t, el, mark);
   };
   if(us) us.onclick = ()=>{ delete S.sent[b]; save(); sendCard(); };
+}
+
+// Открыть WhatsApp с готовым текстом. Отметка «отправлено» ставится, только если WhatsApp реально открылся
+// (страница ушла в фон). Если за 2,5 с не открылся — показываем запасные варианты.
+function openWA(text, box, onOpened){
+  const mob = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const web = "https://wa.me/" + PHONE + "?text=" + encodeURIComponent(text);
+  const app = "whatsapp://send?phone=" + PHONE + "&text=" + encodeURIComponent(text);
+  let done = false;
+  const ok = ()=>{ if(!done){ done = true; onOpened(); } };
+  const h = ()=>{ if(document.visibilityState === "hidden"){ document.removeEventListener("visibilitychange", h); ok(); } };
+  document.addEventListener("visibilitychange", h);
+  flush();
+  if(mob) location.href = app; else window.open(web, "_blank");
+  setTimeout(()=>{
+    document.removeEventListener("visibilitychange", h);
+    if(done) return;
+    const f = document.createElement("div");
+    f.className = "fallback";
+    f.innerHTML = '<div class="q" style="color:var(--warn);margin-top:12px">WhatsApp не открылся</div>'+
+      '<div class="hint">Нажмите эту кнопку. Если и она не сработает, скопируйте текст и вставьте его в наш чат.</div>'+
+      '<a class="btn main" target="_blank" rel="noopener" href="'+(mob ? app : web)+'">Открыть WhatsApp</a>'+
+      '<button class="cp">Скопировать текст</button><button class="mk">Я отправил сам, отметить</button><div class="saved"></div>';
+    box.querySelectorAll(".fallback").forEach(x=>x.remove());
+    box.appendChild(f);
+    f.querySelector("a").onclick = ok;
+    f.querySelector(".cp").onclick = ()=>copy(text, m=>f.querySelector(".saved").textContent = m);
+    f.querySelector(".mk").onclick = ok;
+  }, 2500);
 }
 function blockText(b){
   const [title, qs] = BLOCKS[b-1];
@@ -319,7 +350,7 @@ function finish(){
     let b = wa;
     if(i){ b = document.createElement("button"); b.className = "main"; prev.after(b); }
     if(parts.length > 1) b.textContent = "Отправить в WhatsApp: часть " + (i+1) + " из " + parts.length;
-    b.onclick = ()=>{ b.style.opacity = ".55"; flush(); location.href = "https://wa.me/" + PHONE + "?text=" + encodeURIComponent(p); };
+    b.onclick = ()=>openWA(p, document.querySelector(".actions"), ()=>{ b.style.opacity = ".55"; });
     prev = b;
   });
   document.getElementById("copy").onclick = ()=>copy(buildText(), msg);
